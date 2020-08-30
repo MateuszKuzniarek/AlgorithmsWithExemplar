@@ -1,10 +1,10 @@
 import operator
 
 from deap import base, creator, tools
-from numpy import random
+from numpy import random, math
 
 from common import get_common_parser, display_and_save_results, generate_particle, get_function, \
-    save_fitness_history, save_best_fitness_history
+    save_fitness_history, save_best_fitness_history, genetically_modify_exemplar
 
 
 def parse_args():
@@ -19,6 +19,9 @@ def parse_args():
 def evaluate_butterflies(pop, toolbox):
     best = None
     for part in pop:
+        if not part.best or part.best.fitness < part.fitness:
+            part.best = creator.Particle(part)
+            part.best.fitness.values = part.fitness.values
         part.fitness.values = toolbox.evaluate(part)
         if not best or best.fitness < part.fitness:
             best = creator.Particle(part)
@@ -48,6 +51,10 @@ def move_randomly(part, random_part_1, random_part_2):
     move_butterfly(part, random_part_1, random_part_2)
 
 
+def get_crossover_value(part):
+    return part.best
+
+
 def run_boa(args):
     toolbox = base.Toolbox()
     toolbox.register("particle", generate_particle, size=args.size, pmin=args.pminimum, pmax=args.pmaximum)
@@ -60,6 +67,9 @@ def run_boa(args):
     history = []
     best_history = []
     best = evaluate_butterflies(pop, toolbox)
+    for part in pop:
+        part.exemplar = random.uniform(low=args.pminimum, high=args.pmaximum, size=len(part))
+        #part.exemplar = best
 
     while (args.epoch is None or epoch < args.epoch) and (args.accuracy is None or best_accuracy > args.accuracy):
         best_history.append(best.fitness.values[0])
@@ -68,8 +78,13 @@ def run_boa(args):
         for part in pop:
             history.append([part.fitness.values[0], epoch])
             random_number = random.rand()
+
+            genetically_modify_exemplar(part, pop, toolbox, best, args.mutationProbability, args.pminimum,
+                                        args.pmaximum, args.stoppingGap, get_crossover_value)
+
+            #update
             if random_number < args.switchProbability:
-                move_towards_best(part, best)
+                move_towards_best(part, part.exemplar)
             else:
                 random_index_1 = random.choice(len(pop))
                 random_index_2 = random.choice(len(pop))
@@ -79,6 +94,7 @@ def run_boa(args):
         best_value = toolbox.evaluate(best)[0]
         best_accuracy = abs(args.solution - best_value)
         epoch += 1
+        #print(best_value)
     return epoch, best_value, best_accuracy, best_history, history
 
 
@@ -88,7 +104,7 @@ def main():
     creator.create("Maximum", base.Fitness, weights=(1.0,))
     creator.create("Minimum", base.Fitness, weights=(-1.0,))
     fitness = creator.Minimum if args.minimum else creator.Maximum
-    creator.create("Particle", list, fitness=fitness, fragrance=float)
+    creator.create("Particle", list, exemplar=list, best=None, no_improvement_counter=0, fitness=fitness, fragrance=float)
 
     best_histories = []
     epochs = []
@@ -104,7 +120,9 @@ def main():
             epochs.append(result[0])
 
     save_best_fitness_history("../results/" + args.logCatalog + "/", best_histories)
-    display_and_save_results(epochs, best_values, accuracies, args.accuracy, "../results/" + args.logCatalog + "/")
+    filtered_best_values = [value for value in best_values if not (math.isinf(value) or math.isnan(value))]
+    display_and_save_results(epochs, filtered_best_values, accuracies,
+                             args.accuracy, "../results/" + args.logCatalog + "/")
 
 
 if __name__ == "__main__":

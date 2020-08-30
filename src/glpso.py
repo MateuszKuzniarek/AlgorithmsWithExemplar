@@ -9,57 +9,23 @@ from deap import tools
 from deap import benchmarks
 
 from common import get_common_parser, get_function, generate_particle, set_creator, save_fitness_history, \
-    save_best_fitness_history, display_and_save_results
+    save_best_fitness_history, display_and_save_results, genetically_modify_exemplar
+
+
+def get_crossover_value(part):
+    return part.best
 
 
 def update_particle(part, best, weight, acceleration_factor, pop, mutation_probability,
                     minimum, maximum, stopping_gap, toolbox):
-    exemplar = []
-    #crossover
-    for d in range(0, len(part)):
-        random_part = pop[random.randint(0, len(pop) - 1)]
-        if toolbox.evaluate(part.best) < toolbox.evaluate(random_part.best):
-            random_factor = random.uniform(0, 1)
-            exemplar_value = random_factor * part.best[d] + (1 - random_factor) * best[d]
-            exemplar.append(exemplar_value)
-        else:
-            exemplar_value = random_part[d]
-            exemplar.append(exemplar_value)
-
-    #mutation
-    for d in range(0, len(part)):
-        if random.uniform(0, 1) < mutation_probability:
-            exemplar[d] = random.uniform(minimum, maximum)
-
-    #selection
-    if len(part.exemplar) == 0 or toolbox.evaluate(exemplar) < toolbox.evaluate(part.exemplar):
-        part.exemplar = exemplar
-    else:
-        part.no_improvement_counter += 1
-
-    if part.no_improvement_counter >= stopping_gap:
-        random_subset = random.sample(pop, int(len(pop) * 0.2))
-        best_tournament_part = random_subset[0]
-        for tournament_part in random_subset:
-            if toolbox.evaluate(tournament_part.exemplar) < toolbox.evaluate(best_tournament_part.exemplar):
-                best_tournament_part = tournament_part
-        part.exemplar = best_tournament_part.exemplar
+    genetically_modify_exemplar(part, pop, toolbox, best, mutation_probability, minimum, maximum, stopping_gap,
+                                get_crossover_value)
 
     #update
     for d in range(0, len(part)):
         part.speed[d] = weight * part.speed[d] + \
                         acceleration_factor * random.uniform(0, 1) * (part.exemplar[d] - part[d])
-        if(part.speed[d] == 0):
-            print('dupa')
         part[d] += part.speed[d]
-
-    # for d in range(0, len(part)):
-    #     part.speed[d] = weight * part.speed[d] + \
-    #                     acceleration_factor * random.uniform(0, 1) * (part.best[d] - part[d]) + \
-    #                     acceleration_factor * random.uniform(0, 1) * (best[d] - part[d])
-    #     if(part.speed[d] == 0):
-    #         print('dupa')
-    #     part[d] += part.speed[d]
 
 
 def get_pso_parameters(args):
@@ -110,7 +76,7 @@ def run(args):
         best_history.append(best_value)
         epoch += 1
         accuracy = abs(solution - best_value)
-        print(best_value)
+        #print(best_value)
 
     return epoch, best_value, accuracy, best_history, history
 

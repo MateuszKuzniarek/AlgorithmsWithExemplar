@@ -52,9 +52,11 @@ def display_and_save_results(epochs, best_values, accuracies, expected_accuracy,
         print(is_solution_found_list)
         found_solutions_count = is_solution_found_list.count(True)
         writer.writerow(('found_solutions_count', found_solutions_count))
-        print(found_solutions_count)
+        print('found solution count: ' + str(found_solutions_count))
         writer.writerow(('average best value', numpy.average(best_values)))
+        print('average_best_values: ' + str(numpy.average(best_values)))
         writer.writerow(('standard deviation', numpy.std(best_values)))
+        print('std: ' + str(numpy.std(best_values)))
         if len(epochs) > 0:
             average_records = numpy.average(epochs)
             print(average_records)
@@ -80,6 +82,40 @@ def save_fitness_history(path, data):
             writer.writerow(row)
 
 
+def genetically_modify_exemplar(part, pop, toolbox, best, mutation_probability, minimum, maximum, stopping_gap,
+                                crossover_value):
+    exemplar = []
+    # crossover
+    for d in range(0, len(part)):
+        random_part = pop[random.randint(0, len(pop) - 1)]
+        if toolbox.evaluate(crossover_value(part)) < toolbox.evaluate(crossover_value(random_part)):
+            random_factor = random.uniform(0, 1)
+            exemplar_value = random_factor * crossover_value(part)[d] + (1 - random_factor) * best[d]
+            exemplar.append(exemplar_value)
+        else:
+            exemplar_value = crossover_value(random_part)[d]
+            exemplar.append(exemplar_value)
+
+    # mutation
+    for d in range(0, len(part)):
+        if random.uniform(0, 1) < mutation_probability:
+            exemplar[d] = random.uniform(minimum, maximum)
+
+    # selection
+    if len(part.exemplar) == 0 or toolbox.evaluate(exemplar) < toolbox.evaluate(part.exemplar):
+        part.exemplar = exemplar
+    else:
+        part.no_improvement_counter += 1
+
+    if part.no_improvement_counter >= stopping_gap:
+        random_subset = random.sample(pop, int(len(pop) * 0.2))
+        best_tournament_part = random_subset[0]
+        for tournament_part in random_subset:
+            if toolbox.evaluate(tournament_part.exemplar) < toolbox.evaluate(best_tournament_part.exemplar):
+                best_tournament_part = tournament_part
+        part.exemplar = best_tournament_part.exemplar
+
+
 def save_best_fitness_history(path, best_histories):
     Path(path).mkdir(parents=True, exist_ok=True)
     fitness_file = open(path + 'best_fitness.csv', 'w', newline='')
@@ -101,7 +137,8 @@ def save_best_fitness_history(path, best_histories):
 def get_function(function_name):
     switch = {
         'sphere': benchmarks.sphere,
-        'griewank': benchmarks.griewank
+        'griewank': benchmarks.griewank,
+        'rosenbrock': benchmarks.rosenbrock
     }
 
     return switch.get(function_name, benchmarks.sphere)
